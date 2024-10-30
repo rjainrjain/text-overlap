@@ -1,3 +1,4 @@
+let overlapCount = 0;
 fetch('/svgs')
             .then(response => response.json())
             .then(svgFiles => {
@@ -14,7 +15,6 @@ fetch('/svgs')
                         // bounding boxes of text elements
                         textElements.forEach(text => {
                             const bbox = text.getBoundingClientRect();
-                            //console.log(`${text.textContent}: ${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
                             boundingBoxes.push({ element: text, bbox: bbox });
                         });
                 
@@ -54,7 +54,10 @@ fetch('/svgs')
                 
                                 if (isOverlapping(bbox1, bbox2)) {
                                     const intersectionPoints = getIntersectionPoints(bbox1, bbox2);
-                                    console.log(`${text1} and ${text2} overlap at:`, intersectionPoints);
+                                    if (intersectionPoints.length > 0){
+                                        overlapCount++;
+                                        console.log(`${overlapCount} ${file}: ${text1} and ${text2} overlap at:`, intersectionPoints);
+                                    }
                                 }
                             }
                         }
@@ -66,7 +69,6 @@ fetch('/svgs')
                 });
             })
             .catch(error => console.error('Error fetching SVG files:', error));
-
 /*
 document.addEventListener("DOMContentLoaded", function() {
     const svgObject = document.getElementById("svgObject");
