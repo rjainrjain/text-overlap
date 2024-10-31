@@ -9,9 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "axios": "^1.7.7",
     "express": "^4.21.1",
     "fs-extra": "^11.2.0",
-    "puppeteer": "^23.5.2"
+    "puppeteer": "^23.5.2",
+    "uuid": "^11.0.2"
   },
   "description": ""
 }

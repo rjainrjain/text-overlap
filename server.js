@@ -9,8 +9,8 @@ const PORT = 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Endpoint to get all SVG files
-app.get('/svgs', (req, res) => {
-    const svgDir = path.join(__dirname, 'public/svgs');
+app.get('/mermaidsvg', (req, res) => {
+    const svgDir = path.join(__dirname, 'public/mermaidsvg');
     fs.readdir(svgDir, (err, files) => {
         if (err) {
             return res.status(500).json({ error: 'Unable to read SVG directory' });
