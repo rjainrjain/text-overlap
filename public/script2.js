@@ -35,7 +35,7 @@ function processSVG(svgDoc, file) {
 
     // bounding boxes of text elements
     textElements.forEach(text => {
-        const bbox = text.getBBox();
+        const bbox = text.getBoundingClientRect();
         if (bbox) {
             boundingBoxes.push({ element: text, bbox: bbox });
         }
@@ -82,6 +82,7 @@ function processSVG(svgDoc, file) {
 
 async function processBatch(svgFiles, start, end) {
     for (let i = start; i < end && i < svgFiles.length; i++) {
+        if (i < 50) {continue;}
         const file = svgFiles[i];
         const encodedFileName = encodeURIComponent(file);
         const objectElement = document.createElement('object');
