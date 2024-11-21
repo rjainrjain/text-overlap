@@ -4,20 +4,20 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const username = 'rjainrjain';
-const token = 'secret';
+const token = "";
 const searchBaseUrl = 'https://api.github.com/search/code';
-const query = 'extension:mmd'; // or 'filename:*.mermaid'
 const perPage = 100; // Number of results per page
 
-// Specify your custom download directory here
-const downloadDirectory = '/Users/rijuljain/Documents/Code/text-overlap/mmd'; // Update this path to your desired directory
-if (!fs.existsSync(downloadDirectory)) {
-    fs.mkdirSync(downloadDirectory, { recursive: true });
-}
+const keywords = ["stateDiagram", "pie", "flowchart", "sequenceDiagram", "classDiagram", "graph", "erDiagram", "mindmap", "quadrant", "gitGraph", "journey"];
+const baseDownloadDirectory = '/Users/rijuljain/Documents/Code/text-overlap/mermaid_by_type'; // Update this path to your desired directory
 
 const maxFileNameLength = 255; // Maximum length for filenames (adjust as needed)
 
-async function searchFiles(query, page = 11) {
+if (!fs.existsSync(baseDownloadDirectory)) {
+    fs.mkdirSync(baseDownloadDirectory, { recursive: true });
+}
+
+async function searchFiles(query, page = 1) {
     const url = `${searchBaseUrl}?q=${query}&per_page=${perPage}&page=${page}`;
     try {
         const response = await axios.get(url, {
@@ -71,13 +71,18 @@ async function downloadFile(fileUrl, filePath) {
     }
 }
 
-async function main() {
-    let page = 11;
+async function downloadDiagramsForKeyword(keyword) {
+    const downloadDirectory = path.join(baseDownloadDirectory, keyword);
+    if (!fs.existsSync(downloadDirectory)) {
+        fs.mkdirSync(downloadDirectory, { recursive: true });
+    }
+
+    let page = 1;
     let allFiles = [];
     let files;
 
     do {
-        files = await searchFiles(query, page);
+        files = await searchFiles(`extension:mermaid ${keyword}`, page);
         allFiles = allFiles.concat(files);
         page++;
     } while (files.length === perPage);
@@ -91,6 +96,14 @@ async function main() {
         const filePath = path.join(downloadDirectory, uniqueFileName);
         await downloadFile(fileUrl, filePath);
     }
+}
+
+async function main() {
+    for (const keyword of keywords) {
+        console.log(`Downloading diagrams for keyword: ${keyword}`);
+        await downloadDiagramsForKeyword(keyword);
+    }
+    console.log('All downloads completed.');
 }
 
 main();

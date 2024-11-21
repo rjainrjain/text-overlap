@@ -60,14 +60,16 @@ fetch('/mermaidsvg')
 
                         if (isOverlapping(bbox1, bbox2)) {
                             const intersectionPoints = getIntersectionPoints(bbox1, bbox2);
-                            if (intersectionPoints.length > 0){
+                            const verticalOverlap = intersectionPoints[2].y - intersectionPoints[0].y;
+
+                            if (intersectionPoints.length > 0 && verticalOverlap >= 1) {
                                 overlapCount++;
                                 fileOverlapCount++;
                                 totalOverlaps++;
                                 console.log(`${overlapCount} ${file}: ${text1.textContent} and ${text2.textContent} overlap at:`, intersectionPoints);
-                                console.log('<svg> style:', svgDoc.querySelector("text").style.cssText);
-                                console.log(`<text> 1 style:`, text1.style.cssText);
-                                console.log(`<text> 2 style:`, text2.style.cssText);
+                                //console.log('<svg> style:', svgDoc.querySelector("text").style.cssText);
+                                //console.log(`<text> 1 style:`, text1.style.cssText);
+                                //console.log(`<text> 2 style:`, text2.style.cssText);
                             }
                         }
                     }
@@ -88,7 +90,6 @@ fetch('/mermaidsvg')
     })
     .catch(error => console.error('Error fetching SVG files:', error))
     .finally(() => {
-
         console.log(`Files with at least one overlap: ${filesWithOverlap}`);
         if (filesWithOverlap > 0) {
             const avgOverlaps = totalOverlaps / filesWithOverlap;
