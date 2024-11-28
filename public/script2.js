@@ -1,6 +1,17 @@
 let overlapCount = 0;
 let filesWithOverlap = 0;
 let totalOverlaps = 0;
+const csvData = [];
+
+// Add column labels
+csvData.push({
+  fileNumber: 'File Number',
+  totalOverlapCount: 'Total Overlap Count',
+  fileOverlapCount: 'Overlap Count in File',
+  text1: 'Text 1',
+  text2: 'Text 2',
+  intersectionPoints: 'Intersection Points'
+});
 
 const BATCH_SIZE = 100; // Adjust the batch size as needed
 const container = document.getElementById('svgContainer');
@@ -29,7 +40,7 @@ function getIntersectionPoints(bbox1, bbox2) {
     return points;
 }
 
-function processSVG(svgDoc, file) {
+function processSVG(svgDoc, file, fileIndex) {
     const textElements = svgDoc.querySelectorAll("text");
     const boundingBoxes = [];
 
@@ -69,6 +80,15 @@ function processSVG(svgDoc, file) {
                         fileOverlapCount++;
                         totalOverlaps++;
                         console.log(`${overlapCount} ${file}: ${text1.textContent} and ${text2.textContent} overlap at:`, intersectionPoints);
+
+                        csvData.push({
+                            fileNumber: filesWithOverlap + 1,
+                            totalOverlapCount: overlapCount,
+                            fileOverlapCount: fileOverlapCount,
+                            text1: text1.textContent,
+                            text2: text2.textContent,
+                            intersectionPoints: JSON.stringify(intersectionPoints)
+                        });
                     }
                 }
             }
@@ -82,7 +102,7 @@ function processSVG(svgDoc, file) {
 
 async function processBatch(svgFiles, start, end) {
     for (let i = start; i < end && i < svgFiles.length; i++) {
-        if (i < 50) {continue;}
+        if (i < 50) { continue; }
         const file = svgFiles[i];
         const encodedFileName = encodeURIComponent(file);
         const objectElement = document.createElement('object');
@@ -92,7 +112,7 @@ async function processBatch(svgFiles, start, end) {
         await new Promise((resolve) => {
             objectElement.addEventListener('load', function() {
                 const svgDoc = objectElement.contentDocument;
-                processSVG(svgDoc, file);
+                processSVG(svgDoc, file, i);
                 container.removeChild(objectElement);
                 resolve();
             });
@@ -113,12 +133,40 @@ async function processFilesInBatches(svgFiles) {
         const avgOverlaps = totalOverlaps / filesWithOverlap;
         console.log(`Average number of overlaps per file with overlaps: ${avgOverlaps}`);
     }
+
+    /*// Add summary to CSV data
+    csvData.push({
+        fileNumber: filesWithOverlap,
+        totalOverlapCount: overlapCount,
+        fileOverlapCount: filesWithOverlap,
+        text1: '',
+        text2: '',
+        intersectionPoints: ''
+    });*/
 }
 
-fetch('/mermaidsvg')
-    .then(response => response.json())
-    .then(svgFiles => {
-        console.log(`Fetched ${svgFiles.length} SVG files.`);
-        return processFilesInBatches(svgFiles);
-    })
-    .catch(error => console.error('Error fetching SVG files:', error));
+function downloadCSV() {
+    const csv = Papa.unparse(csvData);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'overlaps.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+document.getElementById('processButton').addEventListener('click', () => {
+    fetch('/mermaidsvg')
+        .then(response => response.json())
+        .then(svgFiles => {
+            console.log(`Fetched ${svgFiles.length} SVG files.`);
+            return processFilesInBatches(svgFiles);
+        })
+        .catch(error => console.error('Error fetching SVG files:', error));
+});
+
+document.getElementById('downloadCSV').addEventListener('click', downloadCSV);

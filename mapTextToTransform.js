@@ -1,17 +1,28 @@
 const fs = require('fs');
 const path = require('path');
 const xml2js = require('xml2js');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
 const folderPath = './public/mermaidsvg';
-
+const csvFilePath = './output.csv';
 
 const parser = new xml2js.Parser();
+
+const csvWriter = createCsvWriter({
+    path: csvFilePath,
+    header: [
+        { id: 'textElement', title: 'Text Element' },
+        { id: 'transformElement', title: 'Transform Element' }
+    ]
+});
 
 // Function to traverse through each file in the folder
 fs.readdir(folderPath, (err, files) => {
     if (err) {
         return console.error('Unable to scan directory: ' + err);
     }
+
+    const allRecords = [];
 
     files.forEach(file => {
         if (path.extname(file) === '.svg') {
@@ -27,10 +38,28 @@ fs.readdir(folderPath, (err, files) => {
 
                     const elementToTransformGMap = new Map();
 
-                    // Traverse SVG elements to find <text>, <p>, or <span> elements and map them to the farthest ancestor <g> with a transform attribute
+                    // Traverse SVG elements to find <text> or <p> elements and map them to the farthest ancestor <g> with a transform attribute
                     traverseSvg(result, elementToTransformGMap);
 
+                    elementToTransformGMap.forEach((transformElement, textElement) => {
+                        allRecords.push({ 
+                            textElement: JSON.stringify(textElement), 
+                            transformElement: JSON.stringify(transformElement) 
+                        });
+                    });
+
                     console.log(`Element to farthest ancestor <g> with transform map for ${file}:`, Array.from(elementToTransformGMap.entries()));
+
+                    if (file === files[files.length - 1]) {
+                        // Write to CSV once all files are processed
+                        csvWriter.writeRecords(allRecords)
+                            .then(() => {
+                                console.log('CSV file written successfully');
+                            })
+                            .catch(err => {
+                                console.error('Error writing to CSV file:', err);
+                            });
+                    }
                 });
             });
         }
@@ -62,8 +91,8 @@ function traverseSvg(element, elementToTransformGMap, currentGWithTransform = nu
 
 // Function to find <text>, <p>, and <span> elements within a given element
 function findTextElements(element, elementToTransformGMap, currentGWithTransform) {
-    if (element.text || element.p || element.span) {
-        const textElements = [].concat(element.text || [], element.p || [], element.span || []);
+    if (element.text || element.p) {
+        const textElements = [].concat(element.text || [], element.p || []);
 
         textElements.forEach(t => {
             elementToTransformGMap.set(t, currentGWithTransform);
@@ -73,7 +102,7 @@ function findTextElements(element, elementToTransformGMap, currentGWithTransform
 
     if (typeof element === 'object') {
         for (let key in element) {
-            if (element.hasOwnProperty(key) && ['text', 'p', 'span'].includes(key)) {
+            if (element.hasOwnProperty(key) && ['text', 'p'].includes(key)) {
                 findTextElements(element[key], elementToTransformGMap, currentGWithTransform);
             }
         }

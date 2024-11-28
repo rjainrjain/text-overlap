@@ -1,14 +1,14 @@
-import { readFileSync, readdirSync } from 'fs';
-import path from 'path';
-import { JSDOM } from 'jsdom';
-import { createObjectCsvWriter } from 'csv-writer';
+const fs = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
+const csvWriter = require('csv-writer').createObjectCsvWriter;
 
-const folderPath = 'public/mermaidsvg'; 
-const batchSize = 100;
-const svgFiles = readdirSync(folderPath).filter(file => path.extname(file) === '.svg');
+const folderPath = '/mermaidsvg';
+const batchSize = 100; // Adjust batch size as needed
+const svgFiles = fs.readdirSync(folderPath).filter(file => path.extname(file) === '.svg');
 let overlapCount = 0;
 
-const writer = createObjectCsvWriter({
+const writer = csvWriter({
   path: 'overlaps.csv',
   header: [
     { id: 'fileNumber', title: 'File Number' },
@@ -26,7 +26,7 @@ const writer = createObjectCsvWriter({
 
     for (const file of batch) {
       const filePath = path.join(folderPath, file);
-      const svgContent = readFileSync(filePath, 'utf8');
+      const svgContent = fs.readFileSync(filePath, 'utf8');
       const dom = new JSDOM(svgContent);
       const document = dom.window.document;
 
