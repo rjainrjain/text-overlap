@@ -1,13 +1,15 @@
 import * as bloom from "https://penrose.cs.cmu.edu/bloom.min.js";
 let parser = new DOMParser();
 
-const db = new bloom.DiagramBuilder(bloom.canvas(500, 500), "abcd", 1);
-const { type, predicate, forall, forallWhere, ensure, circle, line, text, rectangle} = db;
+// Bloom diagram builder to be defined after initial query of SVG canvas size
+let db = null;
+// SVG to Penrose coordinate translation offset to be defined after the same query
+let xOffset, yOffset = 0;
 
 
 function parseTransform(transform) {
     let translate = [0, 0];
-    let rotate = 0;
+    let rotate = [0, 0, 0]; // Modify to store angle, cx, and cy
 
     if (transform) {
         // match translate and rotate
@@ -21,12 +23,38 @@ function parseTransform(transform) {
         }
 
         if (rotateMatch) {
-            // extract rotate value
-            rotate = parseFloat(rotateMatch[1]);
+            // extract rotate values
+            const rotateValues = rotateMatch[1].split(/[\s,]+/).map(parseFloat);
+            if (rotateValues.length === 1) {
+                rotate = [rotateValues[0], 0, 0]; // angle only
+            } else if (rotateValues.length === 3) {
+                rotate = rotateValues; // angle, cx, cy
+            }
         }
     }
 
     return { translate, rotate };
+}
+
+function getCanvasSize(svgElement) {
+    if (!(svgElement instanceof SVGSVGElement)) {
+        throw new Error('The provided element is not an SVGSVGElement.');
+    }
+
+    const viewBox = svgElement.getAttribute('viewBox');
+    if (!viewBox) {
+        throw new Error('The SVG element does not have a viewBox attribute.');
+    }
+
+    const viewBoxValues = viewBox.split(' ').map(parseFloat);
+    if (viewBoxValues.length !== 4) {
+        throw new Error('Invalid viewBox attribute.');
+    }
+
+    const canvasWidth = viewBoxValues[2];
+    const canvasHeight = viewBoxValues[3];
+
+    return [canvasWidth, canvasHeight];
 }
 
 function fetchAndProcessSVG(fileName, callback) {
@@ -36,10 +64,19 @@ function fetchAndProcessSVG(fileName, callback) {
             let doc = parser.parseFromString(svgText, 'image/svg+xml');
             let svgElement = doc.querySelector('svg');
             if (svgElement) {
+                let [canvasWidth, canvasHeight] = getCanvasSize(svgElement);
+                xOffset = canvasWidth / 2;
+                yOffset = canvasHeight / 2;
+
+                db = new bloom.DiagramBuilder(bloom.canvas(canvasWidth, canvasHeight), "abcd", 1);
                 
+                // traverse SVG and build Bloom diagram elements
                 traverseAndCheck(svgElement, callback);
                 const diagram = await db.build();
-                document.body.appendChild(diagram.getInteractiveElement());
+                let elem = diagram.getInteractiveElement();
+                let style = doc.querySelector('style');
+                document.body.appendChild(elem);
+
             }
         
         })
@@ -53,7 +90,62 @@ function handleGElement(element) {
 
 function handleRectElement(element) {
     console.log(`Handling <rect> element: ${element.tagName}`);
-    // todo
+    let props = {};
+    let y, x = 0;
+    let cx, cy = 0;
+    let transl = [];
+    Array.from(element.attributes).forEach(attr => {  
+        if (attr.value) {
+            switch (attr.name) {
+                case 'corner-radius':
+                    //props['cornerRadius'] = +attr.value;
+                    break;
+                case 'stroke-dasharray':
+                    props['strokeDasharray'] = attr.value;
+                    break;
+                case 'stroke-style':
+                    props['strokeStyle'] = attr.value;
+                    break;
+                case 'stroke-width':
+                    props['strokeWidth'] = +attr.value;
+                    break;
+                case 'y':
+                    y = +attr.value;
+                    break;
+                case 'x':
+                    x = +attr.value;
+                    break;
+                case 'height':
+                    props['height'] = +attr.value;
+                    break;
+                case 'width':
+                    props['width'] = +attr.value;
+                    break;
+                case 'transform':
+                    const {translate, rotate} = parseTransform(attr.value);
+                    transl = translate;
+                    if (rotate.length>0) {
+                        props['rotation'] = rotate[0];
+                    }
+            }
+            //console.log(`${attr.name}: ${attr.value}`); 
+        }
+    });
+    cx = x + props['width'] / 2;
+    cy = y + props['height'] / 2;
+
+    // if transform field is set, use that as the center
+    if (transl.length > 0) {
+        let [dx,dy] = transl;
+        props['center'] = [cx+dx-xOffset, yOffset-cy-dy];
+    } else {
+        props['center'] = [cx-xOffset, yOffset-cy];
+    }
+    //props['drag'] = true;
+
+    console.log(props);
+
+    db.rectangle(props);
 }
 
 function handleTextElement(element) {
@@ -105,7 +197,11 @@ function handleTextElement(element) {
                     break;
                 case 'transform':
                     const {translate, rotate} = parseTransform(attr.value);
-                    center = translate;
+                    let [fst, snd] = translate;
+                    center = [fst-xOffset, yOffset-snd];
+                    if (rotate.length>0) {
+                        props['rotation'] = rotate[0];
+                    }
             }
             //console.log(`${attr.name}: ${attr.value}`); 
         }
@@ -115,7 +211,7 @@ function handleTextElement(element) {
     if (center.length > 0) {
         props['center'] = center;
     } else {
-        props['center'] = [x, y];
+        props['center'] = [x-xOffset, yOffset-y];
     }
     props['string'] = element.textContent;
     //props['drag'] = true;
@@ -129,6 +225,7 @@ function handleCircleElement(element) {
     console.log(`Handling <circle> element: ${element.tagName}`);
     let props = {};
     let cy, cx = 0;
+    let center = [];
     Array.from(element.attributes).forEach(attr => {  
         if (attr.value) {
             switch (attr.name) {
@@ -136,20 +233,72 @@ function handleCircleElement(element) {
                     props['r'] = +attr.value;
                     break;
                 case 'cy':
-                    cy = attr.value;
+                    cy = +attr.value;
                     break;
                 case 'cx':
-                    cx = attr.value;
+                    cx = +attr.value;
                     break;
+                case 'transform':
+                    const {translate, rotate} = parseTransform(attr.value);
+                    let [fst, snd] = translate;
+                    center = [fst-xOffset, yOffset-snd];
+                    if (rotate.length>0) {
+                        props['rotation'] = rotate[0];
+                    }
             }
             //console.log(`${attr.name}: ${attr.value}`); 
         }
     });
-    props['center'] = [+cx, +cy];
+    if (center.length > 0) {
+        props['center'] = center;
+    } else {
+        props['center'] = [cx-xOffset, yOffset-cy];
+    }
     //props['drag'] = true;
     console.log(props);
 
     db.circle(props);
+}
+
+function handleEllipseElement(element) {
+    console.log(`Handling <ellipse> element: ${element.tagName}`);
+    let props = {};
+    let cy, cx = 0;
+    let center = [];
+    Array.from(element.attributes).forEach(attr => {  
+        if (attr.value) {
+            switch (attr.name) {
+                case 'rx':
+                    props['rx'] = +attr.value;
+                    break;
+                case 'ry':
+                    props['ry'] = +attr.value;
+                    break;
+                case 'cy':
+                    cy = +attr.value;
+                    break;
+                case 'cx':
+                    cx = +attr.value;
+                    break;
+                case 'transform':
+                    const {translate, rotate} = parseTransform(attr.value);
+                    let [fst, snd] = translate;
+                    center = [fst-xOffset, yOffset-snd];
+                    if (rotate.length>0) {
+                        props['rotation'] = rotate[0];
+                    }
+            }
+        }
+    });
+    if (center.length > 0) {
+        props['center'] = center;
+    } else {
+        props['center'] = [cx-xOffset, yOffset-cy];
+    }
+    //props['drag'] = true;
+    console.log(props);
+
+    db.ellipse(props);
 }
 
 function handleElement(element) {
@@ -165,6 +314,9 @@ function handleElement(element) {
             break;
         case 'circle':
             handleCircleElement(element);
+            break;
+        case 'ellipse':
+            handleEllipseElement(element);
             break;
     }
 }
