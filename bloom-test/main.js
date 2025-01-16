@@ -78,6 +78,8 @@ function fetchAndProcessSVG(fileName, callback) {
                 createTextBoxesAndConstraints(textElements);
                 diagram = await db.build();
                 let elem = diagram.getInteractiveElement();
+                elem.style.width = '60em';
+                elem.style.height = '60em';
                 let style = doc.querySelector('style');
                 document.body.appendChild(elem);
 
@@ -210,12 +212,13 @@ function handleTextElement(element) {
     
     // if transform field is set, use that as the center
     if (center.length > 0) {
-        props['center'] = center;
+        props['center'] = [db.input({ init: center[0] }), db.input({ init: center[1] })];
     } else {
-        props['center'] = [x-xOffset, yOffset-y];
+        props['center'] = [db.input({ init: x-xOffset }), db.input({ init: yOffset-y })];
     }
     props['string'] = element.textContent;
     //props['drag'] = true;
+    props['ensureOnCanvas'] = false;
 
     console.log(props);
 
@@ -341,6 +344,7 @@ function traverseAndCheck(svgElement, callback) {
 
 function createTextBoxesAndConstraints(textShapes) {
     let nextID = 0;
+    const boxes = [];
     for (const text of textShapes) {
         const i = nextID;
 
@@ -353,6 +357,7 @@ function createTextBoxesAndConstraints(textShapes) {
             strokeColor: [1, 0, 0, db.input({ name: `${i}_selected`, optimized: false, init: 0 })],
             strokeWidth: 2
         });
+        boxes.push(box);
 
         db.addEventListener(box, "pointerdown", (e) => {
             if (!e.shiftKey) {
@@ -372,6 +377,13 @@ function createTextBoxesAndConstraints(textShapes) {
 
         nextID++;
     }
+
+    for (let i = 0; i < textShapes.length - 1; i++) {
+        for (let j = i + 1; j < textShapes.length; j++) {
+            const multiplier = db.input({ name: `${i}_${j}_multiplier`, optimized: false, init: 0 });
+            db.ensure(bloom.mul(multiplier, bloom.constraints.disjoint(textShapes[i], textShapes[j])));
+        }
+    }
 }
 
 function updateSelected() {
@@ -390,7 +402,17 @@ const constrainButton = document.createElement("button");
 constrainButton.innerHTML = "constrain";
 constrainButton.id = "constrain-button";
 constrainButton.hidden = true;
+constrainButton.onclick = () => {
+    const [i, j] = [...selectedIDs].sort((a, b) => a - b);
+    diagram.setInput(i + "_" + j + "_multiplier", 1);
+    while (selectedIDs.length > 0) {
+        selectedIDs.pop();
+    }
+    updateSelected();
+}
 document.body.appendChild(constrainButton);
+
+
 
 window.addEventListener("keydown", (e) => {
     // escape
