@@ -5,7 +5,10 @@ let parser = new DOMParser();
 let db = null;
 // SVG to Penrose coordinate translation offset to be defined after the same query
 let xOffset, yOffset = 0;
-
+// temp storage of db elements
+let textElements = [];
+const selectedIDs = [];
+let diagram = null;
 
 function parseTransform(transform) {
     let translate = [0, 0];
@@ -72,7 +75,8 @@ function fetchAndProcessSVG(fileName, callback) {
                 
                 // traverse SVG and build Bloom diagram elements
                 traverseAndCheck(svgElement, callback);
-                const diagram = await db.build();
+                createTextBoxesAndConstraints(textElements);
+                diagram = await db.build();
                 let elem = diagram.getInteractiveElement();
                 let style = doc.querySelector('style');
                 document.body.appendChild(elem);
@@ -156,44 +160,41 @@ function handleTextElement(element) {
     Array.from(element.attributes).forEach(attr => {  
         if (attr.value) {
             switch (attr.name) {
-                case 'alignment-baseline':
-                    props['alignmentBaseline'] = attr.value;
-                    break;
-                case 'dominant-baseline':
-                    props['dominantBaseline'] = attr.value;
-                    break;
-                case 'font-family':
-                    props['fontFamily'] = attr.value;
-                    break;
-                case 'font-size':
-                    props['fontSize'] = attr.value;
-                    break;
-                case 'font-size-adjust':
-                    props['fontSizeAdjust'] = attr.value;
-                    break;
-                case 'font-stretch':
-                    props['fontStretch'] = attr.value;
-                    break;
-                case 'font-style':
-                    props['fontStyle'] = attr.value;
-                    break;
-                case 'font-weight':
-                    props['fontWeight'] = attr.value;
-                    break;
-                case 'font-variant':
-                    props['fontVariant'] = attr.value;
-                    break;
-                case 'text-anchor':
-                    props['textAnchor'] = attr.value;
-                    break;
+                // case 'alignment-baseline':
+                //     props['alignmentBaseline'] = attr.value;
+                //     break;
+                // case 'dominant-baseline':
+                //     props['dominantBaseline'] = attr.value;
+                //     break;
+                // case 'font-family':
+                //     props['fontFamily'] = attr.value;
+                //     break;
+                // case 'font-size':
+                //     props['fontSize'] = attr.value;
+                //     break;
+                // case 'font-size-adjust':
+                //     props['fontSizeAdjust'] = attr.value;
+                //     break;
+                // case 'font-stretch':
+                //     props['fontStretch'] = attr.value;
+                //     break;
+                // case 'font-style':
+                //     props['fontStyle'] = attr.value;
+                //     break;
+                // case 'font-weight':
+                //     props['fontWeight'] = attr.value;
+                //     break;
+                // case 'font-variant':
+                //     props['fontVariant'] = attr.value;
+                //     break;
+                // case 'text-anchor':
+                //     props['textAnchor'] = attr.value;
+                //     break;
                 case 'y':
                     y = +attr.value;
                     break;
                 case 'x':
                     x = +attr.value;
-                    break;
-                case 'height':
-                    props['height'] = +attr.value;
                     break;
                 case 'transform':
                     const {translate, rotate} = parseTransform(attr.value);
@@ -218,7 +219,8 @@ function handleTextElement(element) {
 
     console.log(props);
 
-    db.text(props);
+    let dbElem = db.text(props);
+    textElements.push(dbElem);
 }
 
 function handleCircleElement(element) {
@@ -337,8 +339,68 @@ function traverseAndCheck(svgElement, callback) {
     }
 }
 
+function createTextBoxesAndConstraints(textShapes) {
+    let nextID = 0;
+    for (const text of textShapes) {
+        const i = nextID;
 
+        const box = db.rectangle({
+            width: text.width,
+            height: text.height,
+            center: text.center,
+            rotation: text.rotation,
+            fillColor: [0, 0, 0, 0],
+            strokeColor: [1, 0, 0, db.input({ name: `${i}_selected`, optimized: false, init: 0 })],
+            strokeWidth: 2
+        });
 
+        db.addEventListener(box, "pointerdown", (e) => {
+            if (!e.shiftKey) {
+                return;
+            }
+            if (selectedIDs.find(id => id === i) === undefined) {
+                selectedIDs.push(i);
+            }
+            if (selectedIDs.length > 2) {
+                selectedIDs.shift();
+            }
+            updateSelected();
+            console.log(selectedIDs);
+        });
+
+        db.layer(text, box);
+
+        nextID++;
+    }
+}
+
+function updateSelected() {
+    for (let i = 0; i < textElements.length; i++) {
+        diagram.setInput(i + "_selected", selectedIDs.find(id => id === i) !== undefined ? 1 : 0);
+    }
+
+    if (selectedIDs.length === 2) {
+        document.getElementById("constrain-button").hidden = false;
+    } else {
+        document.getElementById("constrain-button").hidden = true;
+    }
+}
+
+const constrainButton = document.createElement("button");
+constrainButton.innerHTML = "constrain";
+constrainButton.id = "constrain-button";
+constrainButton.hidden = true;
+document.body.appendChild(constrainButton);
+
+window.addEventListener("keydown", (e) => {
+    // escape
+    if (e.key === "Escape") {
+        while (selectedIDs.length > 0) {
+            selectedIDs.pop();
+        }
+        updateSelected();
+    }
+});
 
 fetchAndProcessSVG('test.svg', handleElement);
 
